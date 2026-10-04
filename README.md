@@ -22,7 +22,7 @@ npm run dev
 | `PRODUCT_PLAN.md` | 一页产品方案 |
 | `AI_TOOL_USAGE.md` | 一页 AI 工具使用说明 |
 | `DEMO_SCRIPT.md` | 45 秒录屏脚本 |
-| `demo-welcome.png`、`demo-result.png`、`demo-mobile.png` | 桌面及手机页面演示截图 |
+| `demo-welcome.jpg`、`demo-result.jpg`、`demo-mobile.jpg` | 桌面及手机页面演示截图 |
 | `demo-poster.png` | 浏览器实测导出的 PNG |
 
 ## 技术与生成机制
