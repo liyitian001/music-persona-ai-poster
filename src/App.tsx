@@ -46,6 +46,7 @@ function readShared(): PosterData | null {
     const value = JSON.parse(decodeURIComponent(raw)) as PosterData
     if (!personas.some(x => x.id === value.p) || !styles.some(x => x.id === value.s)) return null
     if (typeof value.n !== 'string' || typeof value.q !== 'string' || typeof value.id !== 'string') return null
+    if (!safeText(value.n) || !safeText(value.q)) return null
     return { ...value, n: value.n.slice(0, 24), q: value.q.slice(0, 80), id: value.id.slice(0, 10) }
   } catch { return null }
 }
@@ -123,7 +124,13 @@ export default function App() {
       if (navigator.share) await navigator.share({ title: 'My FREQUENCY poster', url })
       else await navigator.clipboard.writeText(url)
       setCopied(true); window.setTimeout(() => setCopied(false), 2500)
-    } catch { /* User cancelled share. */ }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return
+      try {
+        await navigator.clipboard.writeText(url)
+        setCopied(true); window.setTimeout(() => setCopied(false), 2500)
+      } catch { setError(lang === 'en' ? 'Sharing is unavailable in this browser. Please scan the QR code.' : '当前浏览器无法分享，请扫描二维码。') }
+    }
   }
   const restart = () => { setStep('persona'); setResult(null); setName(''); setQuote(''); setError(''); history.replaceState(null, '', location.pathname + location.search) }
   const stepIndex = steps.indexOf(step)
