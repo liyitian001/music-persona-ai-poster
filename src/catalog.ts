@@ -35,4 +35,4 @@ export const songs: Song[] = [
 
 export const getSong = (id:string) => songs.find(song => song.id === id)
 export const getArtist = (id:string) => artists.find(artist => artist.id === id)
-export const assetFor = (id:string) => `/posters/songs/${id}.svg`
+export const assetFor = (id:string) => `${import.meta.env.BASE_URL}posters/songs/${id}.svg`
