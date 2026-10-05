@@ -1,43 +1,35 @@
-# FREQUENCY — Music Persona Poster
+# FREQUENCY CONCEPT LAB · Music Memory V3
 
-一个为音乐节互动大屏设计的、英文优先的受控 AIGC 原型。用户选音乐人格与视觉风格，可选填昵称/短句，约 30–45 秒获得可下载、可分享的专属海报。
+基于 Clockenflap 2025 公开资料的**非官方概念原型**。FREQUENCY 是独立虚构品牌；Clockenflap 及其真实嘉宾不是 FREQUENCY FESTIVAL 2026 的合作方或演出阵容。候选歌曲是艺人代表曲目，**不表示当年现场演奏过**。
 
 ## 本地运行
 
-需要 Node.js 20.19+ 或 22.12+。
+需要 Node.js 20.19+ 或 22.12+。在本目录运行：
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-打开终端显示的本地地址。生产构建：`npm run build`；本地预览：`npm run preview`。项目无 `.env`、无需 API Key、无后端。
+`npm run build` 包含 TypeScript 类型检查和 Vite 正式构建。无需 API Key、`.env`、后端、数据库或登录。
 
-## 交付物
+## 体验
 
-| 文件 | 内容 |
-|---|---|
-| `src/` | React + TypeScript 交互与普通 CSS |
-| `public/posters/` | 三张预生成的无文字 AI 背景 |
-| `PRODUCT_PLAN.md` | 一页产品方案 |
-| `AI_TOOL_USAGE.md` | 一页 AI 工具使用说明 |
-| `DEMO_SCRIPT.md` | 45 秒录屏脚本 |
-| `demo-welcome.jpg`、`demo-result.jpg`、`demo-mobile.jpg` | 桌面及手机页面演示截图 |
-| `demo-poster.png` | 浏览器实测导出的 PNG |
+欢迎页只展示抽象信号；选择人格、六位真实参考嘉宾、每人两首核对过的代表歌曲，系统自动选中歌曲的人工策划推荐风格，用户可改选。昵称、原话及同行人均可跳过。完整海报首次在结果页出现；页面解释人格、歌曲和风格如何影响视觉。结果可切换基础／更躁／更梦幻，可导出分享 PNG、高清 PNG，复制链接或扫码恢复。`PLAY TONIGHT’S ANTHEM` 是用户主动点击的官方流媒体外链，不自动播放。
 
-## 技术与生成机制
+界面和交付截图不显示日文字符；Vaundy 的两首歌以拉丁字母转写显示，曲目链接仍指向原作品。
 
-React + Vite + TypeScript + CSS 变量；`html-to-image` 导出 720×1080 PNG；`qrcode.react` 生成分享二维码。海报背景是 AI **预生成** 的本地 JPG，页面把背景、人物文案、昵称、短句、品牌与编号实时组合。生成动画约 3.2 秒，不代表实时模型推理。无运行时生图 API 调用。
+12 套原创歌曲场景在 `public/posters/songs/`，由 `scripts/generate-posters.mjs` 生成，合计远低于 5 MB。源配置在 `src/catalog.ts`，人格与哈希在 `src/model.ts`，海报共用组件在 `src/Poster.tsx`，流程与计时在 `src/App.tsx`。原三张 JPG 只作风格卡局部材质预览。
 
-分享链接把作品配置编码在 URL hash 中，接收端直接重建作品，不经服务器存储。昵称和短句会包含在链接里，请勿输入敏感信息。二维码使用当前页面地址：部署到 Vercel 后可跨设备使用；本地 `127.0.0.1` 地址只能在本机打开。
+## 验收视图
 
-## 失败与安全边界
+运行后打开 `/?qa=overview` 看固定昵称、人格、强度下的 12 套母版；`/?qa=personas` 比较同一首歌的三人格；`/?qa=styles` 比较三风格。对应截图为 `demo-v3-overview.png`、`demo-v3-personas.png`、`demo-v3-styles.png`。这些是仅供审查的直达视图，主流程没有额外操作。
 
-- 所有文字选填，避免输入成为完成障碍；限制昵称 24 字、短句 80 字。
-- 拦截明显网址、联系方式和 HTML 标记；这是演示级过滤，**不能替代正式内容审核**。
-- PNG 导出异常时提示重试或浏览器截图。分享依赖浏览器的系统分享或剪贴板能力。
-- 无账号、数据库、后台、手机号收集或付费生图主流程。没有行为埋点；指标见产品方案，需在正式测试环境实施。
+## 现场与边界
 
-## 部署（待用户批准）
+开始后 45 秒总操作时限；15 秒无操作提示，之后 10 秒自动重置；结果首次显示 20 秒后清场。有效操作只更新无操作时钟，不延长总时限。重置清除所有个人输入、选择、编号、变体、提示及计时状态。图片失败有渐变兜底，生成动画可跳过，导出失败提示重试或复制链接。
 
-代码可按 Vite 静态站点部署到 Vercel：Build Command `npm run build`，Output Directory `dist`。当前项目仅本地创建与提交，**未推送 GitHub、未创建 PR、未部署**。部署前应检查仓库可见性、Git 提交身份、密钥和隐私内容，并用 Vercel 实际域名复测扫码。
+分享链接把配置编码在 URL hash 中，包含用户自填文字；不要输入敏感信息。静态 PNG 不含音乐；在 Instagram、TikTok 或小红书发布时，应由发布者在平台适用的正版曲库自行搜索歌曲，找不到或权限不适用则只发布静态作品。`127.0.0.1` 二维码仅供本机验证，另一设备须有可访问地址。详见 `PRODUCT_PLAN.md`、`AI_TOOL_USAGE.md`、`VISUAL_ASSET_LEDGER.md`、`ACCEPTANCE_TESTS.md`。
+
+**当前交付仅采用 V3**：`demo-v3-*.png`、本 README、`PRODUCT_PLAN.md`、`AI_TOOL_USAGE.md`、`VISUAL_ASSET_LEDGER.md`、`ACCEPTANCE_TESTS.md` 和源代码。旧版截图已移出当前交付目录。尚未推送、未建 PR、未部署。

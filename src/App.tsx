@@ -1,155 +1,96 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toPng } from 'html-to-image'
 import { QRCodeSVG } from 'qrcode.react'
+import { assetFor, artists, getArtist, getSong, songs, STUDY } from './catalog'
+import { Poster, Signal } from './Poster'
+import { defaults, personas, posterId, posterUrl, readShared, safeText, styles, type Lang, type PersonaId, type PosterData, type Step, type StyleId, type Variant } from './model'
 
-type Lang = 'en' | 'zh'
-type Step = 'welcome' | 'persona' | 'style' | 'words' | 'generating' | 'result'
-type PersonaId = 'pulse' | 'dreamer' | 'wildcard'
-type StyleId = 'neon' | 'sunset' | 'forest'
-type PosterData = { p: PersonaId; s: StyleId; n: string; q: string; id: string }
-
-const personas: { id: PersonaId; icon: string; en: string; zh: string; detailEn: string; detailZh: string; title: string; line: string }[] = [
-  { id: 'pulse', icon: '✦', en: 'The Pulse', zh: '脉冲者', detailEn: 'You make the whole crowd move.', detailZh: '你的节奏让全场共振。', title: 'THE PULSE', line: 'BORN TO MOVE THE NIGHT' },
-  { id: 'dreamer', icon: '☾', en: 'The Dreamer', zh: '造梦者', detailEn: 'You find magic between the beats.', detailZh: '你在节拍间发现魔法。', title: 'THE DREAMER', line: 'LOST IN THE BEST WAY' },
-  { id: 'wildcard', icon: '✳', en: 'The Wildcard', zh: '破格者', detailEn: 'No rules. Just your own frequency.', detailZh: '不守规则，只循自己的频率。', title: 'THE WILDCARD', line: 'UNPREDICTABLE BY DESIGN' },
-]
-const styles: { id: StyleId; en: string; zh: string; mood: string; color: string }[] = [
-  { id: 'neon', en: 'Electric night', zh: '电光之夜', mood: 'NEON / AFTER DARK', color: '#c98aff' },
-  { id: 'sunset', en: 'Golden hour', zh: '黄金时刻', mood: 'HEAT / IN MOTION', color: '#ffb36e' },
-  { id: 'forest', en: 'Afterglow', zh: '余辉秘境', mood: 'GLOW / BEYOND', color: '#d6f684' },
-]
-const steps: Step[] = ['persona', 'style', 'words']
-const defaults = { en: 'I came here to feel everything.', zh: '今晚，让心跳跟着音乐走。' }
 const copy = {
-  en: {
-    eyebrow: 'AN EXPERIMENT IN SELF-EXPRESSION', welcomeTitle: <>FIND YOUR<br /><em>FREQUENCY.</em></>, welcomeBody: 'Your music has a personality. Make it visible in 30 seconds.', start: 'Create my poster', time: '≈ 30 SEC · NO SIGN-UP',
-    personaKicker: '01 / YOUR ENERGY', personaTitle: 'What is your festival energy?', personaHint: 'Choose the one that feels most like you.',
-    styleKicker: '02 / YOUR WORLD', styleTitle: 'Set the visual mood.', styleHint: 'Same energy. A different universe.',
-    wordsKicker: '03 / MAKE IT YOURS', wordsTitle: 'Add your signature.', wordsHint: 'A name and a line. Both are optional.', name: 'YOUR NAME / NICKNAME', quote: 'YOUR LINE', optional: 'OPTIONAL', next: 'Continue', generate: 'Make my poster', back: 'Back', skip: 'Surprise me',
-    generating: 'Tuning into your frequency', generatingSub: 'Composing your visual identity…', resultKicker: 'YOUR FESTIVAL ALTER EGO', resultTitle: 'Made for this moment.', resultHint: 'Save it, share it, make it yours.', download: 'Download PNG', share: 'Share link', copied: 'Link copied', remix: 'Make another', scan: 'SCAN TO OPEN ON YOUR PHONE',
-    exportError: 'PNG export failed. Please try again or use your browser’s screenshot.', inputError: 'Please remove links, contact details, or unsupported characters.', privacy: 'Your words stay in this browser. A shared link contains your name and line.', introTag: 'AI-CURATED · HUMAN-OWNED',
-  },
-  zh: {
-    eyebrow: '一次关于自我表达的实验', welcomeTitle: <>找到你的<br /><em>音乐频率。</em></>, welcomeBody: '音乐有性格。30 秒，让你的音乐人格可见。', start: '制作我的海报', time: '约 30 秒 · 无需注册',
-    personaKicker: '01 / 音乐人格', personaTitle: '今晚，你是哪种能量？', personaHint: '选一个最像自己的答案。',
-    styleKicker: '02 / 视觉世界', styleTitle: '选择你的视觉氛围。', styleHint: '同一种能量，不同的宇宙。',
-    wordsKicker: '03 / 留下印记', wordsTitle: '为作品署名。', wordsHint: '昵称和短句均可跳过。', name: '你的名字 / 昵称', quote: '你的一句话', optional: '选填', next: '继续', generate: '生成我的海报', back: '返回', skip: '帮我决定',
-    generating: '正在调频', generatingSub: '正在组合你的视觉人格…', resultKicker: '你的音乐节分身', resultTitle: '这一刻，为你而生。', resultHint: '保存、分享，或再创作一张。', download: '下载 PNG', share: '分享链接', copied: '链接已复制', remix: '再做一张', scan: '扫码在手机上打开',
-    exportError: 'PNG 导出失败，请重试，或使用浏览器截图。', inputError: '请移除网址、联系方式或不支持的字符。', privacy: '输入仅保存在当前浏览器。分享链接中会包含昵称和短句。', introTag: 'AI 预制视觉 · 人来表达',
-  },
+  en: { welcome:'FIND YOUR FREQUENCY.', body:'Pick an artist, choose your anthem, reveal your own music memory.', start:'Start my 45-second journey', persona:'What moves you?', personaHint:'Choose the visual rhythm of your identity.', artist:'WHO DID YOU COME FOR?', artistHint:'Six artists from the verified Clockenflap 2025 lineup.', song:'CHOOSE TONIGHT’S ANTHEM', songHint:'Representative songs, not a verified live setlist.', style:'Choose your atmosphere.', styleHint:'We recommend one for your song. You can change it.', words:'Leave your mark.', wordsHint:'Your words enter the artwork. Every field is optional.', name:'NICKNAME', line:'YOUR LINE', companion:'WITH WHOM?', next:'Continue', back:'Back', generate:'Reveal my music memory', generating:'Composing your signal', result:'This is your frequency.', why:'WHY THIS LOOKS LIKE YOU', save:'Save HD artwork', share:'Download share card', copy:'Copy result link', caption:'Copy share caption', copied:'Copied', play:'PLAY TONIGHT’S ANTHEM ↗', idle:'Still there?', idleBody:'Touch to continue. This session will reset soon.', continue:'Keep creating', error:'Remove links, contact details or unsupported characters.', exportError:'PNG export failed. Try again or copy the result link.', shareError:'Copy unavailable. Scan the QR code instead.', assetError:'Artwork unavailable. A gradient version remains ready to save.', privacy:'The shared link contains the name, line and companion you entered. Avoid sensitive information.', source:'Unofficial research reference. Artists are not a FREQUENCY 2026 lineup.', recommended:'Recommended', because:'The song’s editorial mood and graphic energy fit this atmosphere.', variant:'TUNE YOUR SIGNAL', base:'Original', loud:'More intense', dreamy:'More dreamy', remain:'SESSION TIME', exit:'SCREEN RESETS IN', scan:'SCAN TO OPEN THIS WORK ON YOUR PHONE', fallback:'Reveal now', disclaimer:'Not affiliated with Clockenflap or the artists.' },
+  zh: { welcome:'找到你的音乐频率。', body:'选一位嘉宾、一首代表歌曲，揭晓你的音乐记忆。', start:'开始45秒体验', persona:'什么让你心动？', personaHint:'选择身份卡的视觉节奏。', artist:'今晚你为谁而来？', artistHint:'六位嘉宾均来自已核实的 Clockenflap 2025 阵容。', song:'选择今晚最难忘的一首歌', songHint:'代表曲目候选，并非经核实的现场歌单。', style:'选择视觉氛围。', styleHint:'系统推荐一种，你仍可自由切换。', words:'留下你的印记。', wordsHint:'文字会进入作品，所有字段都可跳过。', name:'昵称', line:'你的一句话', companion:'和谁一起？', next:'继续', back:'返回', generate:'揭晓我的音乐记忆', generating:'正在合成你的信号', result:'这是你的频率。', why:'为什么这张像你', save:'保存高清作品', share:'下载分享卡', copy:'复制作品链接', caption:'复制分享文案', copied:'已复制', play:'主动打开所选歌曲 ↗', idle:'还在吗？', idleBody:'触碰屏幕继续；会话即将清除。', continue:'继续创作', error:'请移除网址、联系方式或不支持的字符。', exportError:'PNG 导出失败，请重试或复制链接。', shareError:'无法复制链接，请扫描二维码。', assetError:'素材加载失败，仍可保存渐变兜底版。', privacy:'分享链接含你输入的昵称、短句与同行关系，请勿输入敏感信息。', source:'非官方研究参考；这些艺人并非 FREQUENCY 2026 阵容。', recommended:'推荐', because:'歌曲的人工策划情绪和图形能量适合这种氛围。', variant:'调整信号', base:'基础版', loud:'更躁', dreamy:'更梦幻', remain:'剩余操作时间', exit:'大屏重置倒计时', scan:'扫码在手机上打开同一作品', fallback:'立即揭晓', disclaimer:'与 Clockenflap 及艺人无合作关系。' },
 }
-
-function readShared(): PosterData | null {
-  try {
-    const raw = new URLSearchParams(location.hash.slice(1)).get('poster')
-    if (!raw || raw.length > 500) return null
-    const value = JSON.parse(decodeURIComponent(raw)) as PosterData
-    if (!personas.some(x => x.id === value.p) || !styles.some(x => x.id === value.s)) return null
-    if (typeof value.n !== 'string' || typeof value.q !== 'string' || typeof value.id !== 'string') return null
-    if (!safeText(value.n) || !safeText(value.q)) return null
-    return { ...value, n: value.n.slice(0, 24), q: value.q.slice(0, 80), id: value.id.slice(0, 10) }
-  } catch { return null }
-}
-
-function safeText(value: string): boolean {
-  return !/(https?:\/\/|www\.|@|\b\d[\d\s-]{7,}\d\b|[<>])/i.test(value)
-}
-
-function posterUrl(data: PosterData): string {
-  const url = new URL(location.href)
-  url.hash = new URLSearchParams({ poster: encodeURIComponent(JSON.stringify(data)) }).toString()
-  return url.toString()
-}
-
-function Poster({ data, posterRef }: { data: PosterData; posterRef?: React.RefObject<HTMLDivElement | null> }) {
-  const persona = personas.find(x => x.id === data.p)!
-  const style = styles.find(x => x.id === data.s)!
-  return <div className={`poster poster-${style.id}`} ref={posterRef} style={{ '--poster-accent': style.color } as React.CSSProperties} aria-label={`${persona.title} poster for ${data.n}`}>
-    <img className="poster-art" src={`/posters/${style.id}.jpg`} alt="" />
-    <div className="poster-vignette" />
-    <div className="poster-top"><span className="poster-brand"><span className="brand-mark">✳</span> FREQUENCY</span><span>FESTIVAL / 2026</span></div>
-    <div className="poster-body"><span className="poster-series">PERSONA SERIES — {style.mood}</span><h2>{persona.title}</h2><p>{persona.line}</p></div>
-    <div className="poster-bottom"><div className="poster-rule" /><div className="poster-quote">“{data.q}”</div><div className="poster-footer"><span>MADE FOR<br /><strong>{data.n}</strong></span><span className="poster-number">NO. {data.id}</span></div></div>
-  </div>
-}
+const seconds = (s:number) => `00:${String(Math.max(0,s)).padStart(2,'0')}`
+const sequence: Step[] = ['persona','artist','song','style','words']
 
 export default function App() {
   const shared = useMemo(readShared, [])
-  const [lang, setLang] = useState<Lang>('en')
-  const [step, setStep] = useState<Step>(shared ? 'result' : 'welcome')
-  const [persona, setPersona] = useState<PersonaId>(shared?.p ?? 'pulse')
-  const [style, setStyle] = useState<StyleId>(shared?.s ?? 'neon')
-  const [name, setName] = useState(shared?.n ?? '')
-  const [quote, setQuote] = useState(shared?.q ?? '')
-  const [result, setResult] = useState<PosterData | null>(shared)
-  const [error, setError] = useState('')
-  const [exporting, setExporting] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const [progress, setProgress] = useState(0)
-  const posterRef = useRef<HTMLDivElement>(null)
+  const sharedView = useRef(Boolean(shared))
+  const [lang,setLang] = useState<Lang>('en')
+  const [step,setStep] = useState<Step>(shared ? 'result' : 'welcome')
+  const [persona,setPersona] = useState<PersonaId | null>(shared?.p ?? null)
+  const [artist,setArtist] = useState<string | null>(shared?.a ?? null)
+  const [song,setSong] = useState<string | null>(shared?.g ?? null)
+  const [style,setStyle] = useState<StyleId | null>(shared?.s ?? null)
+  const [name,setName] = useState(shared?.n ?? '')
+  const [line,setLine] = useState(shared?.q ?? '')
+  const [companion,setCompanion] = useState(shared?.c ?? '')
+  const [result,setResult] = useState<PosterData | null>(shared)
+  const [error,setError] = useState('')
+  const [assetError,setAssetError] = useState(false)
+  const [exporting,setExporting] = useState(false)
+  const [copied,setCopied] = useState(false)
+  const [progress,setProgress] = useState(0)
+  const [remaining,setRemaining] = useState(45)
+  const [resultRemaining,setResultRemaining] = useState(20)
+  const [idleWarning,setIdleWarning] = useState(false)
+  const startedAt = useRef<number | null>(null)
+  const lastActionAt = useRef<number | null>(null)
+  const resultAt = useRef<number | null>(shared ? Date.now() : null)
+  const saveRef = useRef<HTMLDivElement>(null)
+  const shareRef = useRef<HTMLDivElement>(null)
+  const copyTimer = useRef<number | null>(null)
   const t = copy[lang]
+  const selectedSong = getSong(song ?? '')
+  const resultSong = getSong(result?.g ?? '')
+  const resultArtist = getArtist(result?.a ?? '')
+  const resultPersona = personas.find(x => x.id === result?.p)
+  const resultStyle = styles.find(x => x.id === result?.s)
 
+  const resetSession = useCallback(() => {
+    startedAt.current=null; lastActionAt.current=null; resultAt.current=null; sharedView.current=false
+    if(copyTimer.current!==null){window.clearTimeout(copyTimer.current);copyTimer.current=null}
+    setStep('welcome');setLang('en');setPersona(null);setArtist(null);setSong(null);setStyle(null);setName('');setLine('');setCompanion('');setResult(null);setError('');setAssetError(false);setExporting(false);setCopied(false);setProgress(0);setRemaining(45);setResultRemaining(20);setIdleWarning(false)
+    history.replaceState(null,'',location.pathname);window.scrollTo(0,0)
+  },[])
+  const startSession = () => { sharedView.current=false; startedAt.current=Date.now(); lastActionAt.current=Date.now(); setRemaining(45);setIdleWarning(false);setStep('persona');window.scrollTo(0,0) }
+  const recordAction = () => { if(!startedAt.current || step==='welcome' || step==='result') return; lastActionAt.current=Date.now();setIdleWarning(false) }
   useEffect(() => {
-    if (step !== 'generating') return
-    const start = Date.now()
-    const timer = window.setInterval(() => setProgress(Math.min(100, Math.round((Date.now() - start) / 32))), 60)
-    const done = window.setTimeout(() => { setProgress(100); setStep('result') }, 3200)
-    return () => { clearInterval(timer); clearTimeout(done) }
-  }, [step])
-
-  const goBack = () => {
-    if (step === 'style') setStep('persona')
-    if (step === 'words') setStep('style')
-    setError('')
-  }
-  const makePoster = () => {
-    if (!safeText(name) || !safeText(quote)) { setError(t.inputError); return }
-    const data: PosterData = { p: persona, s: style, n: name.trim() || (lang === 'en' ? 'YOU' : '你'), q: quote.trim() || defaults[lang], id: Math.random().toString(36).slice(2, 8).toUpperCase() }
-    setResult(data); setProgress(0); setError(''); setStep('generating')
-    history.replaceState(null, '', location.pathname + location.search)
-  }
-  const download = async () => {
-    if (!posterRef.current || !result) return
-    setExporting(true); setError('')
-    try {
-      await document.fonts.ready
-      const uri = await toPng(posterRef.current, { pixelRatio: 2, cacheBust: true, backgroundColor: '#0c0b14' })
-      const link = document.createElement('a'); link.download = `frequency-${result.id}.png`; link.href = uri; link.click()
-    } catch { setError(t.exportError) } finally { setExporting(false) }
-  }
-  const share = async () => {
-    if (!result) return
-    const url = posterUrl(result)
-    try {
-      if (navigator.share) await navigator.share({ title: 'My FREQUENCY poster', url })
-      else await navigator.clipboard.writeText(url)
-      setCopied(true); window.setTimeout(() => setCopied(false), 2500)
-    } catch (cause) {
-      if (cause instanceof DOMException && cause.name === 'AbortError') return
-      try {
-        await navigator.clipboard.writeText(url)
-        setCopied(true); window.setTimeout(() => setCopied(false), 2500)
-      } catch { setError(lang === 'en' ? 'Sharing is unavailable in this browser. Please scan the QR code.' : '当前浏览器无法分享，请扫描二维码。') }
-    }
-  }
-  const restart = () => { setStep('persona'); setResult(null); setName(''); setQuote(''); setError(''); history.replaceState(null, '', location.pathname + location.search) }
-  const stepIndex = steps.indexOf(step)
-
-  return <main className={`app ${step === 'welcome' ? 'is-welcome' : ''}`}>
-    <header className="site-header"><div className="logo"><span className="logo-icon">✳</span><span>FREQUENCY<span className="logo-dot">.</span></span></div><div className="header-right"><span className="header-edition">AN INTERACTIVE FESTIVAL EXPERIENCE</span><button className="lang-switch" type="button" onClick={() => setLang(lang === 'en' ? 'zh' : 'en')} aria-label="Switch language">{lang === 'en' ? '中文' : 'EN'}</button></div></header>
-    {step !== 'welcome' && step !== 'generating' && step !== 'result' && <div className="step-track" aria-label="Progress"><span>{String(stepIndex + 1).padStart(2, '0')} / 03</span><div className="track"><i style={{ width: `${((stepIndex + 1) / 3) * 100}%` }} /></div><span>CREATE YOUR POSTER</span></div>}
-
-    {step === 'welcome' && <section className="welcome-layout"><div className="welcome-copy"><div className="eyebrow"><span className="eyebrow-line" />{t.eyebrow}</div><h1>{t.welcomeTitle}</h1><p className="lead">{t.welcomeBody}</p><button className="primary-button" onClick={() => setStep('persona')}>{t.start}<span>↗</span></button><div className="micro-copy"><span className="small-star">✳</span>{t.time}<span className="micro-divider" />{t.introTag}</div></div><div className="welcome-visual"><div className="visual-orbit orbit-one" /><div className="visual-orbit orbit-two" /><div className="hero-poster"><img src="/posters/neon.jpg" alt="Violet music festival art preview" /><div className="hero-poster-shade" /><div className="hero-poster-text"><span>FREQUENCY / 2026</span><strong>YOUR SOUND.<br />YOUR SELF.</strong><span>FIND THE FEELING →</span></div></div><div className="hero-caption">A VISUAL IDENTITY<br />FOR YOUR FESTIVAL SELF</div><div className="floating-label">ONE OF ONE <span>↗</span></div></div></section>}
-
-    {step === 'persona' && <section className="choice-section"><div className="section-heading"><span className="section-kicker">{t.personaKicker}</span><h1>{t.personaTitle}</h1><p>{t.personaHint}</p></div><div className="persona-grid">{personas.map((item, i) => <button type="button" className={`persona-card ${persona === item.id ? 'selected' : ''}`} key={item.id} onClick={() => setPersona(item.id)}><span className="card-index">0{i + 1} / 03</span><span className="persona-icon">{item.icon}</span><span className="card-name">{item[lang]}</span><span className="card-detail">{lang === 'en' ? item.detailEn : item.detailZh}</span><span className="card-arrow">↗</span></button>)}</div><div className="choice-actions"><button className="text-button" onClick={() => setStep('welcome')}>← {t.back}</button><button className="primary-button" onClick={() => setStep('style')}>{t.next}<span>↗</span></button></div></section>}
-
-    {step === 'style' && <section className="choice-section"><div className="section-heading"><span className="section-kicker">{t.styleKicker}</span><h1>{t.styleTitle}</h1><p>{t.styleHint}</p></div><div className="style-grid">{styles.map((item, i) => <button type="button" className={`style-card ${style === item.id ? 'selected' : ''}`} key={item.id} onClick={() => setStyle(item.id)}><img src={`/posters/${item.id}.jpg`} alt="" /><div className="style-overlay" /><span className="style-index">0{i + 1} / 03</span><span className="style-name">{item[lang]} <span>↗</span></span></button>)}</div><div className="choice-actions"><button className="text-button" onClick={goBack}>← {t.back}</button><button className="primary-button" onClick={() => setStep('words')}>{t.next}<span>↗</span></button></div></section>}
-
-    {step === 'words' && <section className="words-layout"><div className="words-copy"><div className="section-heading"><span className="section-kicker">{t.wordsKicker}</span><h1>{t.wordsTitle}</h1><p>{t.wordsHint}</p></div><div className="field"><label htmlFor="name">{t.name} <span>{t.optional}</span></label><input id="name" autoComplete="off" maxLength={24} value={name} onChange={e => setName(e.target.value)} placeholder={lang === 'en' ? 'e.g. Alex' : '例如：小乐'} /></div><div className="field"><label htmlFor="quote">{t.quote} <span>{t.optional}</span></label><textarea id="quote" maxLength={80} rows={2} value={quote} onChange={e => setQuote(e.target.value)} placeholder={defaults[lang]} /><small>{quote.length}/80</small></div><p className="privacy-note">✳ {t.privacy}</p>{error && <p className="error" role="alert">{error}</p>}<div className="choice-actions"><button className="text-button" onClick={goBack}>← {t.back}</button><button className="primary-button" onClick={makePoster}>{t.generate}<span>↗</span></button></div></div><div className="words-preview"><div className="preview-label">LIVE PREVIEW / {styles.find(x => x.id === style)?.mood}</div><Poster data={{ p: persona, s: style, n: name.trim() || 'YOU', q: quote.trim() || defaults[lang], id: 'XXXXXX' }} /></div></section>}
-
-    {step === 'generating' && <section className="generating-screen"><div className="generator-art"><div className="generator-ring ring-a" /><div className="generator-ring ring-b" /><div className="generator-core">✳</div></div><span className="section-kicker">FREQUENCY / IN PROCESS</span><h1>{t.generating}<span className="loading-dots">…</span></h1><p>{t.generatingSub}</p><div className="generate-bar"><i style={{ width: `${progress}%` }} /></div><span className="generate-percent">{progress}%</span></section>}
-
-    {step === 'result' && result && <section className="result-layout"><div className="result-copy"><span className="section-kicker">{t.resultKicker}</span><h1>{t.resultTitle}</h1><p>{t.resultHint}</p><div className="result-persona"><span>✳</span><div><small>YOU ARE</small><strong>{personas.find(x => x.id === result.p)?.[lang]}</strong></div></div><div className="result-actions"><button className="primary-button" onClick={download} disabled={exporting}>{exporting ? 'EXPORTING…' : t.download}<span>↓</span></button><button className="secondary-button" onClick={share}>{copied ? t.copied : t.share}<span>↗</span></button></div><button className="text-button remix-button" onClick={restart}>↶ {t.remix}</button>{error && <p className="error" role="alert">{error}</p>}<p className="result-disclosure">{t.privacy}</p></div><div className="result-poster-wrap"><Poster data={result} posterRef={posterRef} /></div><aside className="qr-panel"><div className="qr-box"><QRCodeSVG value={posterUrl(result)} size={110} bgColor="#fff" fgColor="#11111b" marginSize={0} /></div><span>{t.scan}</span><small>FREQUENCY / SHARE YOUR SIGNAL</small></aside></section>}
-    <footer className="site-footer"><span>© 2026 FREQUENCY PROJECT</span><span>MADE FOR THE MOMENT <span className="footer-star">✳</span></span></footer>
+    if(step==='welcome')return
+    const tick=()=>{const now=Date.now();if(step==='result'){if(sharedView.current||resultAt.current===null)return;const left=Math.max(0,Math.ceil((20000-(now-resultAt.current))/1000));setResultRemaining(left);if(left===0)resetSession();return}if(startedAt.current===null||lastActionAt.current===null)return;const left=Math.max(0,Math.ceil((45000-(now-startedAt.current))/1000));setRemaining(left);const idle=now-lastActionAt.current;setIdleWarning(idle>=15000);if(left===0||idle>=25000)resetSession()}
+    tick();const timer=window.setInterval(tick,200);return()=>window.clearInterval(timer)
+  },[step,resetSession])
+  useEffect(() => {
+    if(step!=='generating'||!result)return
+    let active=true;const begin=Date.now();const progressTimer=window.setInterval(()=>{if(active)setProgress(Math.min(96,Math.floor((Date.now()-begin)/34)))},70)
+    let assetTimeout=0, minimumTimeout=0;const image=new Image()
+    const asset=new Promise<boolean>(resolve=>{image.onload=()=>resolve(true);image.onerror=()=>resolve(false);image.src=assetFor(result.g)})
+    const timeout=new Promise<boolean>(resolve=>{assetTimeout=window.setTimeout(()=>resolve(false),2500)})
+    Promise.all([Promise.race([asset,timeout]),new Promise(resolve=>{minimumTimeout=window.setTimeout(resolve,3200)})]).then(([loaded])=>{if(!active)return;if(!loaded)setAssetError(true);setProgress(100);resultAt.current=Date.now();setResultRemaining(20);setStep('result');window.scrollTo(0,0)}).catch(()=>{if(!active)return;setAssetError(true);resultAt.current=Date.now();setStep('result')})
+    return()=>{active=false;image.onload=null;image.onerror=null;window.clearInterval(progressTimer);window.clearTimeout(assetTimeout);window.clearTimeout(minimumTimeout)}
+  },[step,result?.id,result?.g])
+  const move=(next:Step)=>{setError('');setStep(next);window.scrollTo(0,0)}
+  const next=()=>{const i=sequence.indexOf(step);if(i>=0&&i<sequence.length-1)move(sequence[i+1])}
+  const back=()=>{const i=sequence.indexOf(step);if(i>0)move(sequence[i-1]);else resetSession()}
+  const selectArtist=(id:string)=>{setArtist(id);setSong(null);setStyle(null)}
+  const selectSong=(id:string)=>{setSong(id);setStyle(getSong(id)!.recommendedStyle)}
+  const makePoster=()=>{if(!safeText(name)||!safeText(line)||!safeText(companion)){setError(t.error);return}const clean={p:persona??'pulse',s:style??selectedSong?.recommendedStyle??'neon',a:artist??artists[0].id,g:song??songs[0].id,n:name.trim().slice(0,24)||(lang==='en'?'YOU':'你'),q:line.trim().slice(0,80)||defaults[lang],c:companion.trim().slice(0,24)};const data:PosterData={...clean,id:posterId(clean),v:'base'};setResult(data);setAssetError(false);setProgress(0);setError('');move('generating');history.replaceState(null,'',location.pathname)}
+  const download=async(format:'save'|'share')=>{const node=format==='save'?saveRef.current:shareRef.current;if(!node||!result)return;setExporting(true);setError('');try{if(import.meta.env.DEV&&new URLSearchParams(location.search).has('simulateExportFailure'))throw new Error('Simulated');await document.fonts.ready;let uri:string;try{uri=await toPng(node,{pixelRatio:3,cacheBust:true,backgroundColor:'#0c0b14'})}catch{uri=await toPng(node,{pixelRatio:2,skipFonts:true,backgroundColor:'#0c0b14'})}const link=document.createElement('a');link.href=uri;link.download=`frequency-${result.id}-${format}.png`;link.click()}catch{setError(t.exportError)}finally{setExporting(false)}}
+  const copyLink=async()=>{if(!result)return;try{await navigator.clipboard.writeText(posterUrl(result));setCopied(true);setError('');if(copyTimer.current!==null)window.clearTimeout(copyTimer.current);copyTimer.current=window.setTimeout(()=>{setCopied(false);copyTimer.current=null},2500)}catch{setError(t.shareError)}}
+  const copyCaption=async()=>{if(!result||!resultSong||!resultArtist||!resultPersona)return;const caption=`I’M ${resultPersona.title} · TONIGHT’S ANTHEM: ${resultSong.title} — ${resultArtist.name}. ${resultSong.shareLine}. #FindYourFrequency\n${STUDY.brand} · unofficial concept study\n${posterUrl(result)}`;try{await navigator.clipboard.writeText(caption);setCopied(true);setError('')}catch{setError(t.shareError)}}
+  const demoSignal={p:persona??'pulse' as PersonaId,s:style??'neon' as StyleId,a:artist??artists[0].id,g:song??songs[0].id,n:name||'YOU',q:line||defaults[lang],c:companion,v:'base' as Variant}
+  const stepIndex=sequence.indexOf(step)+1
+  return <main className={`app step-${step}`} onPointerDownCapture={e=>{if((e.target as HTMLElement).closest('button,input,textarea'))recordAction()}} onKeyDownCapture={e=>{if((e.target as HTMLElement).closest('button,input,textarea'))recordAction()}} onInputCapture={recordAction}>
+    <header className="site-header"><div className="logo"><span className="logo-icon">✳</span><span>FREQUENCY<span className="logo-dot">.</span></span></div><div className="header-right"><span className="header-edition">{STUDY.brand} · {STUDY.event}</span>{step!=='welcome'&&(sharedView.current&&step==='result'?<span className="session-clock shared-clock">SHARED WORK</span>:<span className="session-clock"><small>{step==='result'?t.exit:t.remain}</small><strong>{seconds(step==='result'?resultRemaining:remaining)}</strong></span>)}<button className="lang-switch" type="button" onClick={()=>setLang(lang==='en'?'zh':'en')}>{lang==='en'?'中文':'EN'}</button></div></header>
+    {stepIndex>0&&<div className="step-track" aria-label="Progress"><span>0{stepIndex} / 05</span><div className="track"><i style={{width:`${stepIndex/5*100}%`}}/></div><span>{STUDY.event} / MUSIC MEMORY</span></div>}
+    {step==='welcome'&&<section className="welcome-layout"><div className="welcome-copy"><div className="eyebrow"><i/>UNOFFICIAL MUSIC MEMORY STUDY</div><span className="festival-label">{STUDY.brand} / {STUDY.event}</span><h1>{t.welcome}</h1><p className="lead">{t.body}</p><button className="primary-button" onClick={startSession}>{t.start}<span>↗</span></button><p className="privacy-note">45 SEC · NO SIGN-UP · {t.source}</p></div><div className="welcome-visual" aria-hidden="true"><div className="sonic-orbit orbit-one"/><div className="sonic-orbit orbit-two"/><div className="sonic-core"><span>✳</span><Signal data={demoSignal}/></div><span className="sonic-tag tag-top">SIGNAL / 001</span><span className="sonic-tag tag-bottom">FIND YOUR FREQUENCY ↗</span></div></section>}
+    {step==='persona'&&<section className="choice-section"><div className="section-heading"><span className="section-kicker">01 / YOUR ENERGY</span><h1>{t.persona}</h1><p>{t.personaHint}</p></div><div className="persona-grid">{personas.map((item,i)=><button type="button" className={`persona-card ${persona===item.id?'selected':''}`} key={item.id} onClick={()=>setPersona(item.id)}><span className="card-index">0{i+1} / 03</span><span className="persona-icon">{item.icon}</span><strong className="card-name">{item[lang]}</strong><span className="card-detail">{lang==='en'?item.detailEn:item.detailZh}</span><span className="card-arrow">↗</span></button>)}</div><div className="choice-actions"><button className="text-button" onClick={back}>← {t.back}</button><button className="primary-button" onClick={()=>{if(!persona)setPersona('pulse');next()}}>{t.next}<span>↗</span></button></div></section>}
+    {step==='artist'&&<section className="choice-section"><div className="section-heading"><span className="section-kicker">02 / YOUR ARTIST</span><h1>{t.artist}</h1><p>{t.artistHint}</p></div><div className="artist-grid">{artists.map(a=><button type="button" className={`artist-card ${artist===a.id?'selected':''}`} key={a.id} onClick={()=>selectArtist(a.id)}><span className="artist-icon">{a.icon}</span><strong>{a.name}</strong><small>{a.origin} · {a.genre}</small></button>)}</div><div className="choice-actions"><button className="text-button" onClick={back}>← {t.back}</button><button className="primary-button" onClick={()=>{if(!artist)selectArtist(artists[0].id);next()}}>{t.next}<span>↗</span></button></div><p className="research-note">{t.source}</p></section>}
+    {step==='song'&&<section className="choice-section"><div className="section-heading"><span className="section-kicker">03 / YOUR ANTHEM · {getArtist(artist??'')?.name}</span><h1>{t.song}</h1><p>{t.songHint}</p></div><div className="song-grid">{songs.filter(x=>x.artistId===(artist??artists[0].id)).map(s=><button className={`song-card ${song===s.id?'selected':''}`} type="button" key={s.id} onClick={()=>selectSong(s.id)}><span className="song-symbol">{s.symbol}</span><small>{s.scene} · {s.mood}</small><strong>{s.title}</strong><span>{lang==='en'?s.mood:s.moodZh}</span></button>)}</div><div className="choice-actions"><button className="text-button" onClick={back}>← {t.back}</button><button className="primary-button" onClick={()=>{if(!song)selectSong(songs.find(x=>x.artistId===(artist??artists[0].id))!.id);next()}}>{t.next}<span>↗</span></button></div></section>}
+    {step==='style'&&<section className="choice-section"><div className="section-heading"><span className="section-kicker">04 / YOUR ATMOSPHERE</span><h1>{t.style}</h1><p>{t.styleHint}</p></div><div className="style-grid">{styles.map((item,i)=><button type="button" className={`style-card ${style===item.id?'selected':''}`} key={item.id} onClick={()=>setStyle(item.id)}><span className={`style-texture texture-${item.id}`} aria-hidden="true"/><span className="style-swatch" style={{background:`linear-gradient(135deg,${item.color},${item.secondary})`}}/><span className="style-index">0{i+1} / 03 {selectedSong?.recommendedStyle===item.id?'· ★':''}</span><strong className="style-name">{item[lang]}</strong><span className="style-mood">{item.mood} · {item.texture}</span></button>)}</div><p className="recommendation-reason">★ {t.recommended}: {styles.find(x=>x.id===selectedSong?.recommendedStyle)?.[lang]} — {t.because} <small>EDITORIAL RULE · NO AUDIO ANALYSIS</small></p><div className="choice-actions"><button className="text-button" onClick={back}>← {t.back}</button><button className="primary-button" onClick={next}>{t.next}<span>↗</span></button></div></section>}
+    {step==='words'&&<section className="words-layout"><div className="words-copy"><div className="section-heading"><span className="section-kicker">05 / YOUR WORDS</span><h1>{t.words}</h1><p>{t.wordsHint}</p></div><div className="field"><label htmlFor="name">{t.name}<span>OPTIONAL</span></label><input id="name" autoComplete="off" maxLength={24} value={name} onChange={e=>{setName(e.target.value.slice(0,24));setError('')}} placeholder={lang==='en'?'e.g. Alex':'例如：小乐'}/></div><div className="field"><label htmlFor="line">{t.line}<span>OPTIONAL</span></label><textarea id="line" maxLength={80} rows={2} value={line} onChange={e=>{setLine(e.target.value.slice(0,80));setError('')}} placeholder={defaults[lang]}/><small>{line.length}/80</small></div><div className="field"><label htmlFor="companion">{t.companion}<span>OPTIONAL</span></label><input id="companion" autoComplete="off" maxLength={24} value={companion} onChange={e=>{setCompanion(e.target.value.slice(0,24));setError('')}} placeholder={lang==='en'?'e.g. Sam':'例如：小明'}/></div><p className="privacy-note">✳ {t.privacy}</p>{error&&<p className="error" role="alert">{error}</p>}<div className="choice-actions"><button className="text-button" onClick={back}>← {t.back}</button><button className="primary-button" onClick={makePoster}>{t.generate}<span>↗</span></button></div></div><div className="signal-preview"><span>YOUR SIGNAL / LIVE</span><Signal data={demoSignal}/><small>INPUT → SIGNAL · FULL ARTWORK REVEALS NEXT</small></div></section>}
+    {step==='generating'&&<section className="generating-screen"><div className="generator-art"><span>✳</span><div className="generator-ring ring-a"/><div className="generator-ring ring-b"/></div><span className="section-kicker">FREQUENCY / IN PROCESS</span><h1>{t.generating}…</h1><p>12 SONG SCENES · EDITORIAL COMPOSITION · DETERMINISTIC SIGNAL</p><div className="generate-bar"><i style={{width:`${progress}%`}}/></div><span className="generate-percent">{progress}%</span><button className="text-button fallback-button" onClick={()=>{resultAt.current=Date.now();setStep('result')}}>{t.fallback}</button></section>}
+    {step==='result'&&result&&resultSong&&resultArtist&&<section className="result-layout"><div className="result-copy"><span className="section-kicker">YOUR MUSIC MEMORY</span><h1>{t.result}</h1><p>{resultArtist.name} · {resultSong.title} · {resultPersona?.[lang]}</p><div className="result-identity"><span>{resultPersona?.icon}</span><div><small>TONIGHT’S ANTHEM / MY PICK</small><strong>{resultSong.title} — {resultArtist.name}</strong></div></div><div className="recommendation"><small>{t.why}</small><strong>{resultPersona?.[lang]} + {resultSong.scene} + {resultStyle?.[lang]}</strong><span>{lang==='en'?`${resultPersona?.en} shaped the layout; the hand-curated ${resultSong.mood.toLowerCase()} scene and your own words shaped the rest.`:`${resultPersona?.zh}版式、为歌曲人工策划的“${resultSong.moodZh}”场景，以及你的原话共同形成这张作品。`}</span></div><div className="variant-control"><small>{t.variant}</small><div>{(['base','loud','dreamy'] as Variant[]).map(v=><button key={v} className={result.v===v?'active':''} onClick={()=>setResult({...result,v})}>{t[v]}</button>)}</div></div><div className="result-actions"><button className="primary-button" disabled={exporting} onClick={()=>download('share')}>{exporting?'EXPORTING…':t.share}<span>↓</span></button><button className="secondary-button" disabled={exporting} onClick={()=>download('save')}>{t.save}<span>↓</span></button></div><div className="result-links"><button className="text-button" onClick={copyLink}>{copied?t.copied:t.copy} ↗</button><button className="text-button" onClick={copyCaption}>{t.caption} ↗</button><a className="text-button play-link" href={resultSong.url} target="_blank" rel="noopener noreferrer">{t.play}</a><button className="text-button" onClick={resetSession}>↶ {t.back}</button></div>{assetError&&<p className="notice" role="status">{t.assetError}</p>}{error&&<p className="error" role="alert">{error}</p>}<p className="result-disclosure">{t.privacy} {t.disclaimer}</p></div><div className="result-art"><Poster data={result} format="share" posterRef={shareRef} onImageError={()=>setAssetError(true)}/></div><aside className="qr-panel"><div className="qr-box"><QRCodeSVG value={posterUrl(result)} size={144} bgColor="#fff" fgColor="#11111b" marginSize={0}/></div><span>{t.scan}</span><small>#FindYourFrequency</small></aside><div className="export-stage" aria-hidden="true"><Poster data={result} format="save" posterRef={saveRef} onImageError={()=>setAssetError(true)}/></div></section>}
+    <footer className="site-footer"><span>{STUDY.brand} · {STUDY.disclaimer}</span><span>{STUDY.event} RESEARCH REFERENCE <b>✳</b></span></footer>
+    {idleWarning&&step!=='welcome'&&step!=='result'&&<div className="idle-overlay" role="alertdialog" aria-modal="true" aria-label={t.idle}><div className="idle-dialog"><span>✳</span><h2>{t.idle}</h2><p>{t.idleBody}</p><button className="primary-button" onClick={()=>{lastActionAt.current=Date.now();setIdleWarning(false)}}>{t.continue}<span>↗</span></button></div></div>}
   </main>
 }
